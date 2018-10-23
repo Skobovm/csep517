@@ -1,0 +1,7 @@
+- The code is contained in the src directory
+- Run everything by running the main.py file
+- input_parser.py contains code for parsing the input files and cleansing the text
+- The models are all self contained in their respective files
+- Line 36 of main.py is where you can specify which data file to use
+- Line 37 of main.py is where K-values are specified
+- Line 106 of main.py is where Linear Interpolation values can be specified

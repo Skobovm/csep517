@@ -1,12 +1,10 @@
 import special_chars
-import numpy as np
-import matplotlib.mlab as mlab
 import matplotlib.pyplot as plt
 import math
 
 DRAW_DISTRIBUTION = False
 ASSERT_SUM = True
-UNK_CUTOFF = 10
+UNK_CUTOFF = 2
 
 class UnigramModel:
 
@@ -34,7 +32,7 @@ class UnigramModel:
         for key in self.word_map:
             times_seen = self.word_map[key]
 
-            if times_seen < UNK_CUTOFF:
+            if times_seen <= UNK_CUTOFF:
                 keys_to_unk.append(key)
         return keys_to_unk
 
@@ -68,6 +66,10 @@ class UnigramModel:
             self.word_map.pop(key)
             self.word_map[special_chars.UNK] += times_seen
 
+        # Assume we have seen at least 1 unknown word
+        if self.word_map[special_chars.UNK] == 0:
+            self.word_map[special_chars.UNK] = 1
+
         if DRAW_DISTRIBUTION:
             total = []
             for key in self.word_map:
@@ -79,7 +81,10 @@ class UnigramModel:
     def calculate_probabilities(self):
         for word in self.word_map:
             numeric_probability = self.word_map[word] / self.total_words
-            self.probabilities[word] = math.log(numeric_probability, 2)
+            try:
+                self.probabilities[word] = math.log(numeric_probability, 2)
+            except:
+                print('hmm')
 
             if ASSERT_SUM:
                 self.numeric_probabilities[word] = numeric_probability
@@ -87,6 +92,18 @@ class UnigramModel:
         if ASSERT_SUM:
             total_probability = sum(self.numeric_probabilities[key] for key in list(self.numeric_probabilities.keys()))
             print('Total probability sum: %s' % total_probability)
+
+    def get_indexed_probability(self, sentence_components, i):
+        word = sentence_components[i]
+
+        if word not in self.word_map:
+            word = special_chars.UNK
+
+        if word not in self.numeric_probabilities:
+            # Doesn't exist, so probability is 0
+            return 0
+
+        return self.numeric_probabilities[word]
 
     def get_probability(self, sentence_components):
         log_probability = 0
