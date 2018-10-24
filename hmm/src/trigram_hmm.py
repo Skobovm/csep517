@@ -21,15 +21,17 @@ class TrigramHMM:
     def add_sentence(self, sentence):
         self.bigram.add_sentence(sentence)
 
+        sentence_copy = copy.deepcopy(sentence)
+
         # Making the sentences trigram friendly after adding in bigram
-        sentence.insert(0, [START, START])
+        sentence_copy.insert(0, [START, START])
 
         # 1 = first seen, 2 = 2nd seen, etc...
         previous_tag1 = None
         previous_tag2 = None
 
         # iterate over every word
-        for word_tuple in sentence:
+        for word_tuple in sentence_copy:
             tag = word_tuple[1]
 
             # Want to be careful with START tag - don't count as a word

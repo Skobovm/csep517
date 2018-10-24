@@ -8,9 +8,9 @@ L1 = .99 # Transition prob
 L2 = .01 # Tag prob
 
 # Trigram interpolation args
-TL1 = .8
-TL2 = .15
-TL3 = .05
+TL1 = .95
+TL2 = .04
+TL3 = .01
 
 
 class Lattice:
@@ -199,25 +199,14 @@ class TrigramLattice:
         # This comes from the bigram model
         tag_probability = self.model.get_tag_probability(next_node.tag)
 
-        if trigram_transition_probability == float('-inf'):
-            if bigram_transition_probability == float('-inf'):
-                return tag_probability
-            else:
-                transition_numeric_prob = math.pow(2, bigram_transition_probability)
-                tag_numeric_prob = math.pow(2, tag_probability)
+        trigram_transition_numeric_prob = math.pow(2, trigram_transition_probability) if trigram_transition_probability != float('-inf') else 0
+        bigram_transition_numeric_prob = math.pow(2, bigram_transition_probability) if bigram_transition_probability != float('-inf') else 0
+        tag_numeric_prob = math.pow(2, tag_probability)
 
-                # Use the bigram lambdas
-                numeric_prob = (transition_numeric_prob * L1) + (tag_numeric_prob * L2)
-                return math.log(numeric_prob, 2)
-        else:
-            # TODO: probably faster to just return the right one...
-            trigram_transition_numeric_prob = math.pow(2, bigram_transition_probability)
-            bigram_transition_numeric_prob = math.pow(2, bigram_transition_probability)
-            tag_numeric_prob = math.pow(2, tag_probability)
-
-            # Use the bigram lambdas
-            numeric_prob = (trigram_transition_numeric_prob * TL1) + (bigram_transition_numeric_prob * TL2) + (tag_numeric_prob * TL3)
-            return math.log(numeric_prob, 2)
+        # Use the bigram lambdas
+        numeric_prob = (trigram_transition_numeric_prob * TL1) + (bigram_transition_numeric_prob * TL2) + (
+                    tag_numeric_prob * TL3)
+        return math.log(numeric_prob, 2)
 
 
     def _calculate_transitions(self):
