@@ -71,6 +71,9 @@ class TrigramHMM:
     def get_emission_probabilities(self, word):
         return self.bigram.get_emission_probabilities(word)
 
+    def get_emission_probability(self, tag, word):
+        return self.bigram.get_emission_probability(tag, word)
+
     def get_transition_probability(self, tag1, tag2, next_tag):
         condition = (tag1, tag2)
         if condition not in self.transition_map:

@@ -6,11 +6,21 @@ import logging
 import math
 
 
-def get_num_correct(sentence, pos_list):
+def get_num_correct(sentence, pos_list, model):
     num_correct = 0
     for i in range(len(pos_list)):
-        if pos_list[i] == sentence[i + 1][1]:
+        correct_tag = sentence[i + 1][1]
+        if pos_list[i] == correct_tag:
             num_correct += 1
+        else:
+            column = model.columns[i + 1]
+            tag_found = False
+            for node in column.nodes:
+                if node == correct_tag:
+                    tag_found = True
+                    break
+            if not tag_found:
+                print('Pruned too hard!')
 
     return num_correct
 
@@ -54,8 +64,8 @@ def main():
             pos_list_trigram = tri_lattice.get_pos()
 
             # Determine how many were correct
-            num_correct_bigram += get_num_correct(parsed_sentence, pos_list_bigram)
-            num_correct_trigram += get_num_correct(parsed_sentence, pos_list_trigram)
+            num_correct_bigram += get_num_correct(parsed_sentence, pos_list_bigram, lattice)
+            num_correct_trigram += get_num_correct(parsed_sentence, pos_list_trigram, lattice)
             total_words += len(pos_list_bigram)
         else:
             print('ERROR! Couldnt parse sentence')

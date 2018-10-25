@@ -63,10 +63,12 @@ class BigramHMM:
     # Create an emission frequency distribution for unknown words
     def _low_freq_to_unk(self):
         unk_obj = {'__TOTAL__': 0}
-
+        distinct_words = 0
         # TODO: Do we need to remove the word itself, or can we just create a low-count frequency distribution?
         for word in self.emission_map:
+
             if self.emission_map[word]['__TOTAL__'] <= UNK_THRESHOLD:
+                distinct_words += 1
                 manual_word_type = get_manual_tag(word)
 
                 # Only make it part of the distribution if we can't guess a type
@@ -132,25 +134,53 @@ class BigramHMM:
 
     def get_emission_probabilities(self, word):
         # We have the word
+        ret_val = None
         if word in self.emission_map:
-            ret_val = copy.deepcopy(self.emission_map[word])
+            # This is the prune value - if we have more than this many samples, assume we know all tags associated
+            # with the current word
+            if self.emission_map[word]['__TOTAL__'] > 10000:
+                ret_val = copy.deepcopy(self.emission_map[word])
 
-        else:
-            manual_word_type = get_manual_tag(word)
-            if manual_word_type:
-                ret_val = {manual_word_type: {'probability': 1.0, 'log_probability': 0}}
-            else:
-                ret_val = copy.deepcopy(self.emission_map[UNK])
-
-        # Sanitize, so we don't have this as a key
-        if '__TOTAL__' in ret_val:
-            ret_val.pop('__TOTAL__')
+        # else:
+        #     manual_word_type = get_manual_tag(word)
+        #     if manual_word_type:
+        #         ret_val = {manual_word_type: {'probability': 1.0, 'log_probability': 0}}
+        #     else:
+        #         ret_val = copy.deepcopy(self.emission_map[UNK])
+        #
+        # # Sanitize, so we don't have this as a key
+        # if '__TOTAL__' in ret_val:
+        #     ret_val.pop('__TOTAL__')
         return ret_val
+
+    def get_emission_probability(self, tag, word):
+        k_constant = .001
+
+        vocab_size = len(self.emission_map)
+
+        # Get the total number of the tag
+        tag_count = self.tag_probabilities[tag]['count'] if tag in self.tag_probabilities else 0
+
+        # Get the total number of words with that tag
+        # if word not in self.emission_map:
+        #     # UNK cases
+        #     word = UNK
+
+        if word in self.emission_map and tag in self.emission_map[word]:
+            word_count = self.emission_map[word][tag]['count']
+        else:
+            word_count = 0
+
+        probability = (word_count + k_constant) / (tag_count + (k_constant * vocab_size))
+
+        if probability == 0:
+            return float('-inf')
+        return math.log(probability, 2)
 
     def get_transition_probability(self, tag, next_tag):
         if tag not in self.transition_map:
             # This is very unlikely, but can happen
-            print('tag not in transition map!')
+            #print('tag not in transition map!')
             return float('-inf')
 
         next_tag_probabilities = self.transition_map[tag]
@@ -162,6 +192,5 @@ class BigramHMM:
         return next_tag_probabilities[next_tag]['log_probability']
 
     def get_tag_probability(self, tag):
-        return self.tag_probabilities[tag]['log_probability']
-
+        return self.tag_probabilities[tag]['log_probability'] if tag in self.tag_probabilities else float('-inf')
 
