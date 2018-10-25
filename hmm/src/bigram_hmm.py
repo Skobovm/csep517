@@ -121,7 +121,7 @@ class BigramHMM:
 
     def finalize(self):
         # Create a distribution for UNK words
-        self._low_freq_to_unk()
+        # self._low_freq_to_unk()
 
         # Calculate the emission probabilities
         self._calculate_emission_mle()
@@ -138,7 +138,7 @@ class BigramHMM:
         if word in self.emission_map:
             # This is the prune value - if we have more than this many samples, assume we know all tags associated
             # with the current word
-            if self.emission_map[word]['__TOTAL__'] > 10000:
+            if self.emission_map[word]['__TOTAL__'] > 100 and not word.startswith('__'):
                 ret_val = copy.deepcopy(self.emission_map[word])
 
         # else:
@@ -154,24 +154,18 @@ class BigramHMM:
         return ret_val
 
     def get_emission_probability(self, tag, word):
-        k_constant = .001
-
-        vocab_size = len(self.emission_map)
-
         # Get the total number of the tag
         tag_count = self.tag_probabilities[tag]['count'] if tag in self.tag_probabilities else 0
 
-        # Get the total number of words with that tag
-        # if word not in self.emission_map:
-        #     # UNK cases
-        #     word = UNK
+        if tag_count == 0:
+            return float('-inf')
 
         if word in self.emission_map and tag in self.emission_map[word]:
             word_count = self.emission_map[word][tag]['count']
         else:
             word_count = 0
 
-        probability = (word_count + k_constant) / (tag_count + (k_constant * vocab_size))
+        probability = word_count/tag_count
 
         if probability == 0:
             return float('-inf')

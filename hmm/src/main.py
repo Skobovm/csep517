@@ -2,6 +2,7 @@ from input_parser import InputParser
 from bigram_hmm import BigramHMM
 from trigram_hmm import TrigramHMM
 from lattice import Lattice, TrigramLattice
+from word_counter import WordCounter
 import logging
 import math
 
@@ -31,18 +32,31 @@ def main():
     dev_parser = InputParser('/Users/skobovm/repos/csep517/hmm/data/twt.dev.json')
     test_parser = InputParser('/Users/skobovm/repos/csep517/hmm/data/twt.test.json')
 
+    # First, count the words!
+    counter = WordCounter()
+    for parsed_sentence in training_parser.get_tokenized_sentences():
+        if parsed_sentence:
+            for i in range(1, len(parsed_sentence) - 1):
+                counter.add_word(parsed_sentence[i][0])
+
+    # Finalize counter and separate high frequency from low frequency
+    counter.finalize()
+
     # Initialize the models
     bigram = BigramHMM()
     trigram = TrigramHMM()
 
     for parsed_sentence in training_parser.get_tokenized_sentences():
         if parsed_sentence:
+            # Convert the low frequency words to classes
+            counter.classify_sentence(parsed_sentence)
+
             bigram.add_sentence(parsed_sentence)
             trigram.add_sentence(parsed_sentence)
 
     # Models have been initialized at this point, finalize the distributions
     bigram.finalize()
-    trigram.finalize()
+    #trigram.finalize()
 
     # PICK THE PARSER HERE
     parser = dev_parser
@@ -53,19 +67,22 @@ def main():
     total_words = 0
     for parsed_sentence in parser.get_tokenized_sentences():
         if parsed_sentence:
+            # Convert the low frequency words to classes
+            counter.classify_sentence(parsed_sentence)
+
             # Bigram lattice
             lattice = Lattice(bigram, parsed_sentence)
 
             # Trigram lattice
-            tri_lattice = TrigramLattice(trigram, parsed_sentence)
+            #tri_lattice = TrigramLattice(trigram, parsed_sentence)
 
             # Calculate best POS using viterbi
             pos_list_bigram = lattice.get_pos()
-            pos_list_trigram = tri_lattice.get_pos()
+            #pos_list_trigram = tri_lattice.get_pos()
 
             # Determine how many were correct
             num_correct_bigram += get_num_correct(parsed_sentence, pos_list_bigram, lattice)
-            num_correct_trigram += get_num_correct(parsed_sentence, pos_list_trigram, lattice)
+            #num_correct_trigram += get_num_correct(parsed_sentence, pos_list_trigram, lattice)
             total_words += len(pos_list_bigram)
         else:
             print('ERROR! Couldnt parse sentence')
