@@ -8,9 +8,9 @@ L1 = .99 # Transition prob
 L2 = .01 # Tag prob
 
 # Trigram interpolation args
-TL1 = .95
+TL1 = .7
 TL2 = .04
-TL3 = .01
+TL3 = .3
 
 
 class Lattice:
@@ -65,9 +65,9 @@ class Lattice:
                 node.tag_probability = probabilities[tag]['log_probability']
 
             # This will make it faster, but do we want to necessarily get rid of this?
-            for tag in TAGS:
-                if tag in self.nodes and self.nodes[tag].tag_probability == float('-inf'):
-                    self.nodes.pop(tag)
+            # for tag in TAGS:
+            #     if tag in self.nodes and self.nodes[tag].tag_probability == float('-inf'):
+            #         self.nodes.pop(tag)
 
     def __init__(self, model, sentence):
         # Keep the columns in inserted order
@@ -133,6 +133,10 @@ class Lattice:
 
         return False
 
+    def _get_bp(self, i, tag):
+        key = (i, tag)
+        return self.bp_memo[key]
+
     def _set_bp(self, i, tag, node):
         key = (i, tag)
         self.bp_memo[key] = node
@@ -182,20 +186,30 @@ class Lattice:
         self._calculate_transitions()
 
         # Get the transitions (saved as linked list)
-        result = []
-        path_node = self.columns[-1].nodes[STOP]
-        while path_node:
-            result.insert(0, path_node.tag)
-            path_node = path_node.previous_node
+        # result = []
+        # path_node = self.columns[-1].nodes[STOP]
+        # while path_node:
+        #     result.insert(0, path_node.tag)
+        #     path_node = path_node.previous_node
+        # result = result[1:-1]
 
-        return result[1:-1]
+        bp_result = []
+        i = len(self.columns) - 1
+        tag = STOP
 
+        while tag != START:
+            node = self._get_bp(i, tag)
+            tag = node.tag
+            i -= 1
+            bp_result.insert(0, tag)
 
+        bp_result = bp_result[1:]
 
+        # for i in range(len(result)):
+        #     if result[i] != bp_result[i]:
+        #         print('NO BUENO!')
 
-
-
-
+        return bp_result
 
 
 class TrigramLattice:
@@ -236,9 +250,9 @@ class TrigramLattice:
                 node.tag_probability = probabilities[tag]['log_probability']
 
             # This will make it faster, but do we want to necessarily get rid of this?
-            for tag in TAGS:
-                if tag in self.nodes and self.nodes[tag].tag_probability == float('-inf'):
-                    self.nodes.pop(tag)
+            # for tag in TAGS:
+            #     if tag in self.nodes and self.nodes[tag].tag_probability == float('-inf'):
+            #         self.nodes.pop(tag)
 
         def set_emission_probabilities(self, model):
             tags_to_remove = []
@@ -297,18 +311,17 @@ class TrigramLattice:
         # This will come from the trigram model
         trigram_transition_probability = self.model.get_transition_probability(node1.tag, node2.tag, next_node.tag)
 
-        bigram_transition_probability = self.model.get_bigram_transition_probability(node2.tag, next_node.tag)
+        #bigram_transition_probability = self.model.get_bigram_transition_probability(node2.tag, next_node.tag)
 
         # This comes from the bigram model
         tag_probability = self.model.get_tag_probability(next_node.tag)
 
         trigram_transition_numeric_prob = math.pow(2, trigram_transition_probability) if trigram_transition_probability != float('-inf') else 0
-        bigram_transition_numeric_prob = math.pow(2, bigram_transition_probability) if bigram_transition_probability != float('-inf') else 0
+        #bigram_transition_numeric_prob = math.pow(2, bigram_transition_probability) if bigram_transition_probability != float('-inf') else 0
         tag_numeric_prob = math.pow(2, tag_probability)
 
         # Use the bigram lambdas
-        numeric_prob = (trigram_transition_numeric_prob * TL1) + (bigram_transition_numeric_prob * TL2) + (
-                    tag_numeric_prob * TL3)
+        numeric_prob = (trigram_transition_numeric_prob * TL1) + (tag_numeric_prob * TL3)
         if numeric_prob == 0:
             return float('-inf')
         return math.log(numeric_prob, 2)
@@ -330,6 +343,14 @@ class TrigramLattice:
             return True
 
         return False
+
+    def _get_bp(self, i, tag1, tag2):
+        key = (i, tag1, tag2)
+        return self.bp_memo[key]
+
+    def _set_bp(self, i, tag1, tag2, node):
+        key = (i, tag1, tag2)
+        self.bp_memo[key] = node
 
 
     def _calculate_transitions(self):
@@ -365,6 +386,7 @@ class TrigramLattice:
                         is_new_max = self._set_pi(i - 1, tag2, next_tag, log_prob)
 
                         if is_new_max:
+                            self._set_bp(i - 1, tag2, next_tag, node1)
                             max_prob = log_prob
                             max_prob_node = node2
 
@@ -377,22 +399,53 @@ class TrigramLattice:
         self._calculate_emissions()
 
         # Calculate the transitions for all remaining nodes
-        self._calculate_transitions()
+        last_tag = self._calculate_transitions()
 
         # Get the transitions (saved as linked list)
-        result = []
-        path_node = self.columns[-1].nodes[STOP]
-        while path_node and path_node.tag != START:
-            result.insert(0, path_node.tag)
+        # result = []
+        # path_node = self.columns[-1].nodes[STOP]
+        # while path_node and path_node.tag != START:
+        #     result.insert(0, path_node.tag)
+        #
+        #     max_val = float('-inf')
+        #     max_tag = None
+        #     for tag in path_node.max_vals:
+        #         val = path_node.max_vals[tag]
+        #         if val > max_val:
+        #             max_val = val
+        #             max_tag = tag
+        #     path_node = path_node.previous_max_nodes[max_tag]
+        # result = result[:-1]
 
-            max_val = float('-inf')
-            max_tag = None
-            for tag in path_node.max_vals:
-                val = path_node.max_vals[tag]
-                if val > max_val:
-                    max_val = val
-                    max_tag = tag
-            path_node = path_node.previous_max_nodes[max_tag]
+        bp_result = []
+        i = len(self.columns) - 2
 
-        return result[:-1]
+        max_val = float('-inf')
+        max_tag = None
+        stop_node = self.columns[-1].nodes[STOP]
+        for tag in stop_node.max_vals:
+            if stop_node.max_vals[tag] > max_val:
+                max_val = stop_node.max_vals[tag]
+                max_tag = tag
+
+        # if not max_tag:
+        #     print('NO BUENO!')
+        tag1 = max_tag
+        tag2 = STOP
+
+        while tag1 != START:
+            node = self._get_bp(i, tag1, tag2)
+            next_tag = node.tag
+            i -= 1
+            bp_result.insert(0, tag1)
+
+            # Shift the tags
+            tag1, tag2 = next_tag, tag1
+
+        # for i in range(len(result)):
+        #     if result[i] != bp_result[i]:
+        #         print('NO BUENO!')
+
+
+        return bp_result
 

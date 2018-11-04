@@ -1,6 +1,6 @@
 import re
 
-UNK_THRESHOLD = 5
+UNK_THRESHOLD = 2
 
 # Word classes
 UNK = '__UNK__'
@@ -37,26 +37,8 @@ DOT_NUM = '__DOT_NUM__'
 MONEY = '__MONEY__'
 TICKER = '__TICKER__'
 HAS_UNDERSCORE = '__UNDERSCORE__'
+FIRST_WORD = '__FIRST_WORD__'
 
-
-
-def get_manual_tag(word):
-    if word.startswith('#'):
-        return HASHTAG # hashtag
-    elif word.startswith('@'):
-        return MENTION  # mention
-    elif word.startswith('http:') or word.startswith('https:') or word.startswith('www.') or '.co' in word:
-        return URL  # url
-
-    # maybe remove more chars found in words?
-    clean_word = re.sub('[^0-9a-zA-Z ]+', '', word)
-    if not clean_word.isalnum():
-        return SYMBOLS # punctuation/unknown
-    if not clean_word.isalpha():
-        return NUMBER  # numeric
-
-    # Don't have a solid rule for this one
-    return None
 
 class WordCounter:
 
@@ -64,6 +46,7 @@ class WordCounter:
         self.word_counts = {}
         self.high_freq = {}
         self.unclassified = {}
+        self.classes = {}
 
     def add_word(self, word):
         if word not in self.word_counts:
@@ -81,6 +64,14 @@ class WordCounter:
         # Try to classify
         for word in self.word_counts:
             word_class = self._get_class(word, -1)
+
+            if word_class.startswith('__'):
+                if word_class not in self.classes:
+                    self.classes[word_class] = {}
+
+                if word not in self.classes[word_class]:
+                    self.classes[word_class][word] = 0
+                self.classes[word_class][word] += 1
 
             if word_class == UNK:
                 self.unclassified[word] = self.word_counts[word]
@@ -194,7 +185,12 @@ class WordCounter:
         return None
 
     def _get_class(self, word, index):
-        if word.startswith('#'):
+        # Special chars exist
+        possessive = self._get_possessive(word)
+        if possessive:
+            return possessive
+
+        if word.startswith('#') and word[1:].isalnum():
             return HASHTAG  # hashtag
         elif word.startswith('@'):
             return MENTION  # mention
@@ -212,7 +208,7 @@ class WordCounter:
             elif word.islower():
                 return LOWERCASE
             elif word[0].isupper() and word[1:].islower():
-                return PROPER
+                return PROPER if index > 0 else FIRST_WORD
         elif word.isnumeric():
             # All numbers
             return NUMBER
@@ -220,15 +216,17 @@ class WordCounter:
             # Letters and numbers
             return ALPHANUM
 
-        # Special chars exist
-        possessive = self._get_possessive(word)
-        if possessive:
-            return possessive
-
         # Numeric types
         split_type = self._get_split_type(word)
         if split_type:
             return split_type
+
+        money = self._is_money(word)
+        if money:
+            return MONEY
+
+        if index == 0:
+            return FIRST_WORD
 
         # Try removing unicode chars
         non_ascii_removed = self._remove_non_ascii(word)
@@ -241,10 +239,6 @@ class WordCounter:
 
         if non_ascii_removed.isnumeric() and len(non_ascii_removed) < len(word):
             return EMOJI_NUM
-
-        money = self._is_money(word)
-        if money:
-            return MONEY
 
         # Some words split by parents in wrong places
         bad_split = self._is_bad_split(non_ascii_removed)

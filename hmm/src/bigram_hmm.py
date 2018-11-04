@@ -1,9 +1,11 @@
-from tags import get_manual_tag, UNK, MANUAL_TAGS
+# from tags import get_manual_tag, UNK, MANUAL_TAGS
 import math
 from collections import OrderedDict
 import copy
 
 UNK_THRESHOLD = 5
+ABSOLUTE_DISCOUNTING = True
+ABSOLUTE_DISCOUNTING_VALUE = .75
 
 class BigramHMM:
 
@@ -19,6 +21,10 @@ class BigramHMM:
 
         # Tracks the MLE of any given tag, over whole set
         self.tag_probabilities = {}
+
+        self.words_per_tag = {}
+
+        self.max_likelihood_counts = {}
 
 
     def add_sentence(self, sentence):
@@ -60,36 +66,43 @@ class BigramHMM:
                 self.tag_probabilities[tag] = {'count': 0}
             self.tag_probabilities[tag]['count'] += 1
 
+            # Tracks the words associated with each tag
+            if tag not in self.words_per_tag:
+                self.words_per_tag[tag] = {}
+            if word not in self.words_per_tag[tag]:
+                self.words_per_tag[tag][word] = {'count': 0}
+            self.words_per_tag[tag][word]['count'] += 1
+
     # Create an emission frequency distribution for unknown words
-    def _low_freq_to_unk(self):
-        unk_obj = {'__TOTAL__': 0}
-        distinct_words = 0
-        # TODO: Do we need to remove the word itself, or can we just create a low-count frequency distribution?
-        for word in self.emission_map:
-
-            if self.emission_map[word]['__TOTAL__'] <= UNK_THRESHOLD:
-                distinct_words += 1
-                manual_word_type = get_manual_tag(word)
-
-                # Only make it part of the distribution if we can't guess a type
-                if not manual_word_type:
-                    total = 0
-                    for key in self.emission_map[word]:
-                        if key == '__TOTAL__':
-                            continue
-                        else:
-                            # MANUAL_TAGS have their own distribution, so we don't want the UNK distribution calculating them
-                            # otherwise we would have invalid probability distributions
-                            if key not in MANUAL_TAGS:
-                                if key not in unk_obj:
-                                    unk_obj[key] = {'count': 0}
-                                unk_obj[key]['count'] += self.emission_map[word][key]['count']
-                                total += self.emission_map[word][key]['count']
-
-                    # Update total after we know how many words we counted
-                    unk_obj['__TOTAL__'] += total
-
-        self.emission_map[UNK] = unk_obj
+    # def _low_freq_to_unk(self):
+    #     unk_obj = {'__TOTAL__': 0}
+    #     distinct_words = 0
+    #     # TODO: Do we need to remove the word itself, or can we just create a low-count frequency distribution?
+    #     for word in self.emission_map:
+    #
+    #         if self.emission_map[word]['__TOTAL__'] <= UNK_THRESHOLD:
+    #             distinct_words += 1
+    #             manual_word_type = get_manual_tag(word)
+    #
+    #             # Only make it part of the distribution if we can't guess a type
+    #             if not manual_word_type:
+    #                 total = 0
+    #                 for key in self.emission_map[word]:
+    #                     if key == '__TOTAL__':
+    #                         continue
+    #                     else:
+    #                         # MANUAL_TAGS have their own distribution, so we don't want the UNK distribution calculating them
+    #                         # otherwise we would have invalid probability distributions
+    #                         if key not in MANUAL_TAGS:
+    #                             if key not in unk_obj:
+    #                                 unk_obj[key] = {'count': 0}
+    #                             unk_obj[key]['count'] += self.emission_map[word][key]['count']
+    #                             total += self.emission_map[word][key]['count']
+    #
+    #                 # Update total after we know how many words we counted
+    #                 unk_obj['__TOTAL__'] += total
+    #
+    #     self.emission_map[UNK] = unk_obj
 
     def _calculate_emission_mle(self):
         for word in self.emission_map:
@@ -153,23 +166,57 @@ class BigramHMM:
         #     ret_val.pop('__TOTAL__')
         return ret_val
 
+    def _get_maximum_likelihood_discounting(self, tag):
+        if tag not in self.max_likelihood_counts:
+            count_sum = sum([(self.emission_map[word]['__TOTAL__'] / self.total_words) for word in self.emission_map if word not in self.words_per_tag[tag]])
+            self.max_likelihood_counts[tag] = count_sum
+
+        return self.max_likelihood_counts[tag]
+
     def get_emission_probability(self, tag, word):
-        # Get the total number of the tag
-        tag_count = self.tag_probabilities[tag]['count'] if tag in self.tag_probabilities else 0
+        if ABSOLUTE_DISCOUNTING:
+            discount_value = .75
 
-        if tag_count == 0:
-            return float('-inf')
+            # Get the total number of the tag
+            tag_count = self.tag_probabilities[tag]['count'] if tag in self.tag_probabilities else 0
 
-        if word in self.emission_map and tag in self.emission_map[word]:
-            word_count = self.emission_map[word][tag]['count']
+            if tag_count == 0:
+                return float('-inf')
+
+            if word in self.emission_map and tag in self.emission_map[word]:
+                word_count = self.emission_map[word][tag]['count'] - discount_value
+                probability = word_count / tag_count
+            else:
+                # number of words for this tag
+                distinct_words = len(self.words_per_tag[tag])
+
+                alpha = (distinct_words / self.tag_probabilities[tag]['count']) * discount_value
+                denominator = self._get_maximum_likelihood_discounting(tag)
+                qml = self.emission_map[word]['__TOTAL__'] / self.total_words
+
+                probability = alpha * (qml / denominator)
+
+            if probability == 0:
+                return float('-inf')
+            return math.log(probability, 2)
         else:
-            word_count = 0
+            # Non-smoothed
+            # Get the total number of the tag
+            tag_count = self.tag_probabilities[tag]['count'] if tag in self.tag_probabilities else 0
 
-        probability = word_count/tag_count
+            if tag_count == 0:
+                return float('-inf')
 
-        if probability == 0:
-            return float('-inf')
-        return math.log(probability, 2)
+            if word in self.emission_map and tag in self.emission_map[word]:
+                word_count = self.emission_map[word][tag]['count']
+            else:
+                word_count = 0
+
+            probability = word_count/tag_count
+
+            if probability == 0:
+                return float('-inf')
+            return math.log(probability, 2)
 
     def get_transition_probability(self, tag, next_tag):
         if tag not in self.transition_map:

@@ -34,22 +34,22 @@ TAGS = {
     STOP: 'stop'
 }
 
-MANUAL_TAGS = ['#', '@', 'U', '$', ',']
+# MANUAL_TAGS = ['#', '@', 'U', '$', ',']
 
-def get_manual_tag(word):
-    if word.startswith('#'):
-        return '#' # hashtag
-    elif word.startswith('@'):
-        return '@'  # mention
-    elif word.startswith('http') or word.startswith('www') or '.co' in word:
-        return 'U'  # url
-
-    # maybe remove more chars found in words?
-    clean_word = clean_word = re.sub('[^0-9a-zA-Z ]+', '', word)
-    if not clean_word.isalnum():
-        return ','  # punctuation
-    if not clean_word.isalpha():
-        return '$'  # numeric
-
-    # Don't have a solid rule for this one
-    return None
+# def get_manual_tag(word):
+#     if word.startswith('#'):
+#         return '#' # hashtag
+#     elif word.startswith('@'):
+#         return '@'  # mention
+#     elif word.startswith('http') or word.startswith('www') or '.co' in word:
+#         return 'U'  # url
+#
+#     # maybe remove more chars found in words?
+#     clean_word = clean_word = re.sub('[^0-9a-zA-Z ]+', '', word)
+#     if not clean_word.isalnum():
+#         return ','  # punctuation
+#     if not clean_word.isalpha():
+#         return '$'  # numeric
+#
+#     # Don't have a solid rule for this one
+#     return None

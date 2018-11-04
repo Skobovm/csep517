@@ -1,10 +1,11 @@
-from tags import get_manual_tag, UNK, MANUAL_TAGS, START
+from tags import START
 from bigram_hmm import BigramHMM
 import math
 from collections import OrderedDict
 import copy
 
 UNK_THRESHOLD = 5
+LAPLACE_SMOOTHING = False
 
 class TrigramHMM:
 
@@ -75,18 +76,35 @@ class TrigramHMM:
         return self.bigram.get_emission_probability(tag, word)
 
     def get_transition_probability(self, tag1, tag2, next_tag):
-        condition = (tag1, tag2)
-        if condition not in self.transition_map:
-            # print('tag not in transition map!')
-            return float('-inf')
+        if LAPLACE_SMOOTHING:
+            k_constant = 1
+            condition = (tag1, tag2)
+            condition_count = 0
+            tag_count = 0
+            if condition in self.transition_map:
+                condition_count = self.transition_map[condition]['__TOTAL__']
 
-        next_tag_probabilities = self.transition_map[condition]
+                next_tag_probabilities = self.transition_map[condition]
 
-        # If it doesn't exist, we can't calculate this
-        if next_tag not in next_tag_probabilities:
-            return float('-inf')
+                # If it doesn't exist, we can't calculate this
+                if next_tag in next_tag_probabilities:
+                    tag_count = next_tag_probabilities[next_tag]['count']
 
-        return next_tag_probabilities[next_tag]['log_probability']
+            probability = (tag_count + k_constant) / (condition_count + (k_constant * len(self.transition_map)))
+            return math.log(probability, 2)
+        else:
+            condition = (tag1, tag2)
+            if condition not in self.transition_map:
+                # print('tag not in transition map!')
+                return float('-inf')
+
+            next_tag_probabilities = self.transition_map[condition]
+
+            # If it doesn't exist, we can't calculate this
+            if next_tag not in next_tag_probabilities:
+                return float('-inf')
+
+            return next_tag_probabilities[next_tag]['log_probability']
 
     def get_bigram_transition_probability(self, tag, next_tag):
         return self.bigram.get_transition_probability(tag, next_tag)
